@@ -1,0 +1,6 @@
+paho-mqtt
+psycopg2-binary
+streamlit
+pandas
+streamlit-autorefresh
+python-dotenv
