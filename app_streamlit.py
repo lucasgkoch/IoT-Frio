@@ -35,6 +35,28 @@ def get_db_config():
     }
 
 
+def get_time_delta(label):
+    """
+    Convierte la opción seleccionada en el sidebar
+    a un rango de tiempo utilizable para filtrar datos.
+    """
+
+    if label == "Últimos 15 minutos":
+        return pd.Timedelta(minutes=15)
+    if label == "Última hora":
+        return pd.Timedelta(hours=1)
+    if label == "Últimas 3 horas":
+        return pd.Timedelta(hours=3)
+    if label == "Últimas 6 horas":
+        return pd.Timedelta(hours=6)
+    if label == "Últimas 12 horas":
+        return pd.Timedelta(hours=12)
+    if label == "Últimas 24 horas":
+        return pd.Timedelta(hours=24)
+
+    return None
+
+
 DB_CONFIG = get_db_config()
 
 
@@ -139,12 +161,58 @@ selected_devices = st.sidebar.multiselect(
     default=devices
 )
 
-df_filtered = df_readings[df_readings["device_id"].isin(selected_devices)]
+time_window_label = st.sidebar.selectbox(
+    "Rango de tiempo",
+    options=[
+        "Últimos 15 minutos",
+        "Última hora",
+        "Últimas 3 horas",
+        "Últimas 6 horas",
+        "Últimas 12 horas",
+        "Últimas 24 horas",
+        "Todo"
+    ],
+    index=1
+)
 
+
+# Filtro por equipo
+df_filtered = df_readings[df_readings["device_id"].isin(selected_devices)].copy()
+
+# Filtro por rango de tiempo
+time_delta = get_time_delta(time_window_label)
+min_timestamp = None
+max_timestamp = None
+
+if time_delta is not None and not df_filtered.empty:
+    # Usamos la última lectura disponible como referencia,
+    # no la hora actual del servidor.
+    max_timestamp = df_filtered["timestamp_sensor"].max()
+    min_timestamp = max_timestamp - time_delta
+
+    df_filtered = df_filtered[
+        df_filtered["timestamp_sensor"] >= min_timestamp
+    ]
+
+
+# Filtro de alertas
 if not df_alerts.empty:
-    df_alerts_filtered = df_alerts[df_alerts["device_id"].isin(selected_devices)]
+    df_alerts_filtered = df_alerts[df_alerts["device_id"].isin(selected_devices)].copy()
+
+    if time_delta is not None and min_timestamp is not None:
+        df_alerts_filtered = df_alerts_filtered[
+            df_alerts_filtered["timestamp_alert"] >= min_timestamp
+        ]
 else:
     df_alerts_filtered = df_alerts
+
+
+if df_filtered.empty:
+    st.warning(
+        "No hay lecturas para los filtros seleccionados. "
+        "Probá ampliar el rango de tiempo o seleccionar otros equipos."
+    )
+    st.stop()
 
 
 # KPIs principales
@@ -161,6 +229,15 @@ col2.metric("Alertas", f"{total_alertas:,}")
 col3.metric("Equipos", equipos_activos)
 col4.metric("Temp. promedio", f"{temp_promedio:.2f} °C")
 col5.metric("Consumo prom.", f"{consumo_promedio:.3f} kW")
+
+
+if time_window_label != "Todo" and min_timestamp is not None and max_timestamp is not None:
+    st.caption(
+        f"Mostrando datos desde {min_timestamp.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"hasta {max_timestamp.strftime('%Y-%m-%d %H:%M:%S')}."
+    )
+else:
+    st.caption("Mostrando todos los datos disponibles para los filtros seleccionados.")
 
 
 st.divider()
@@ -278,4 +355,4 @@ else:
     )
 
 
-st.caption("Los datos se actualizan automáticamente cada 5 segundos")
+st.caption("Los datos se actualizan automáticamente cada 5 segundos.")
