@@ -12,17 +12,22 @@ load_dotenv()
 def get_db_config():
     """
     Lee configuración de PostgreSQL desde Streamlit secrets si existen.
-    Si no, usa variables de entorno cargadas desde .env.
+    Si no existen secrets, usa variables de entorno cargadas desde .env.
     """
 
-    if "postgres" in st.secrets:
+    try:
+        postgres_secrets = st.secrets.get("postgres", None)
+    except Exception:
+        postgres_secrets = None
+
+    if postgres_secrets:
         return {
-            "host": st.secrets["postgres"]["host"],
-            "port": int(st.secrets["postgres"]["port"]),
-            "dbname": st.secrets["postgres"]["dbname"],
-            "user": st.secrets["postgres"]["user"],
-            "password": st.secrets["postgres"]["password"],
-            "sslmode": st.secrets["postgres"].get("sslmode", "require"),
+            "host": postgres_secrets["host"],
+            "port": int(postgres_secrets["port"]),
+            "dbname": postgres_secrets["dbname"],
+            "user": postgres_secrets["user"],
+            "password": postgres_secrets["password"],
+            "sslmode": postgres_secrets.get("sslmode", "require"),
         }
 
     return {
@@ -33,7 +38,6 @@ def get_db_config():
         "password": os.getenv("DB_PASSWORD", "iot_password"),
         "sslmode": os.getenv("DB_SSLMODE", "prefer"),
     }
-
 
 def get_time_delta(label):
     """
